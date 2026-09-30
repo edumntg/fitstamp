@@ -11,18 +11,20 @@
 
   // ---------- finding cards ----------
 
-  const ID_FROM_HREF = [/\/jobs\/view\/(?:[^/?#]*-)?(\d{6,})/, /[?&]currentJobId=(\d{6,})/];
+  // Only /jobs/view/<id> links identify a job. `currentJobId=` is NOT used: on the
+  // search page nearly every link (feedback, footer, chips) carries the id of the
+  // job that is open, which would stamp all of them.
+  const idFromHref = (href) => (href?.match(/\/jobs\/view\/(?:[^/?#]*-)?(\d{6,})/) || [])[1] || null;
 
-  function idFromHref(href) {
-    for (const re of ID_FROM_HREF) {
-      const m = href && href.match(re);
-      if (m) return m[1];
-    }
-    return null;
-  }
+  // The open job's pane, in the 2026 layout, the older logged-in layout and the
+  // logged-out page.
+  const DETAIL_ROOTS =
+    '[data-sdui-screen*="JobDetails"], .jobs-search__job-details, .jobs-details, .job-view-layout, .details-pane__content, .top-card-layout';
 
-  // LinkedIn renames classes often, so cards are found by data attributes first
-  // and by links to /jobs/view/<id> as a fallback.
+  // Card selectors, newest layout first:
+  //   2026 layout: div[role=button][componentkey="job-card-component-ref-<id>"], no links inside
+  //   older logged-in layout: li[data-occludable-job-id] / [data-job-id]
+  //   logged-out page: [data-entity-urn="urn:li:jobPosting:<id>"]
   function findCards() {
     const cards = new Map();
     const add = (el, id) => {
@@ -30,6 +32,9 @@
       if (el.parentElement?.closest("[data-fitstamp-id]")) return; // nested inside a stamped card
       cards.set(el, id);
     };
+    document.querySelectorAll('[role="button"][componentkey^="job-card-component-ref-"]').forEach((el) => {
+      add(el, el.getAttribute("componentkey").slice("job-card-component-ref-".length).match(/^\d+/)?.[0]);
+    });
     document.querySelectorAll("li[data-occludable-job-id]").forEach((el) => add(el, el.dataset.occludableJobId));
     document.querySelectorAll("[data-job-id]").forEach((el) => {
       if (!el.closest("li[data-occludable-job-id]")) add(el, el.dataset.jobId);
@@ -37,12 +42,34 @@
     document.querySelectorAll('[data-entity-urn*="jobPosting:"]').forEach((el) => {
       add(el, (el.getAttribute("data-entity-urn").match(/jobPosting:(\d+)/) || [])[1]);
     });
-    document.querySelectorAll('a[href*="/jobs/view/"], a[href*="currentJobId="]').forEach((a) => {
-      if (a.closest("li[data-occludable-job-id], [data-job-id], [data-entity-urn*='jobPosting:']")) return;
-      if (a.closest(".jobs-search__job-details, .jobs-details, .job-view-layout")) return;
+    document.querySelectorAll('a[href*="/jobs/view/"]').forEach((a) => {
+      if (a.closest("[data-fitstamp-id], li[data-occludable-job-id], [data-job-id], [data-entity-urn*='jobPosting:'], [componentkey^='job-card-component-ref-']")) return;
+      if (a.closest(DETAIL_ROOTS)) return;
       add(a.closest("li") || a, idFromHref(a.getAttribute("href")));
     });
     return cards;
+  }
+
+  // The open job: its id and the element its stamp goes right after (the title).
+  function findDetail() {
+    for (const root of document.querySelectorAll(DETAIL_ROOTS)) {
+      const link = root.querySelector('a[href*="/jobs/view/"]');
+      const id = idFromHref(link?.getAttribute("href"));
+      if (!id) continue;
+      // Title links sit inside a <p>/<h1>/<h2> in some layouts and wrap the <h2> in others.
+      const after = /^(P|H1|H2|H3)$/.test(link.parentElement.tagName) ? link.parentElement : link;
+      return { id, after };
+    }
+    return null;
+  }
+
+  // In the 2026 layout the card is a wrapper around one flex column; the stamp
+  // goes at the end of that column so it sits under "Posted … · Easy Apply".
+  function slotFor(card) {
+    if (card.matches("[componentkey^='job-card-component-ref-']")) {
+      return card.querySelector(":scope > [componentkey^='job-card-component-ref-']") || card;
+    }
+    return card;
   }
 
   function cardText(card) {
@@ -54,7 +81,7 @@
       return "";
     };
     return {
-      title: pick([".job-card-list__title", ".job-card-list__title--link", ".base-search-card__title", "a[href*='/jobs/view/'] strong", "a[href*='/jobs/view/']"]),
+      title: pick([".job-card-list__title", ".job-card-list__title--link", ".base-search-card__title", "a[href*='/jobs/view/'] strong", "a[href*='/jobs/view/']", "p"]),
       company: pick([".artdeco-entity-lockup__subtitle", ".job-card-container__primary-description", ".base-search-card__subtitle"]),
       location: pick([".job-card-container__metadata-item", ".artdeco-entity-lockup__caption", ".job-search-card__location"]),
     };
@@ -122,7 +149,7 @@
         return process({ id, card }, attempt + 1);
       }
     }
-    const fromCard = cardText(card);
+    const fromCard = card ? cardText(card) : {};
     const job = {
       id,
       title: posting?.title || fromCard.title,
@@ -190,19 +217,37 @@
     return el;
   }
 
-  function render(card, id) {
+  // Puts the stamp for `id` into `old`'s place, or hands a new one to `insert`.
+  function place(old, id, insert, extraClass) {
     const r = results.get(id);
-    const old = card.querySelector(":scope > .fitstamp-badge");
     if (!r) return void old?.remove();
-    const key = `${r.state}:${r.data?.match ?? ""}`;
+    const key = `${id}:${r.state}:${r.data?.match ?? ""}`;
     if (old && old.dataset.key === key) return;
     const badge = badgeFor(r);
     badge.dataset.key = key;
-    old ? old.replaceWith(badge) : card.appendChild(badge);
+    if (extraClass) badge.classList.add(extraClass);
+    old ? old.replaceWith(badge) : insert(badge);
+  }
+
+  function render(card, id) {
+    const slot = slotFor(card);
+    const inline = slot !== card ? "fitstamp-inline" : "";
+    place(slot.querySelector(":scope > .fitstamp-badge"), id, (b) => slot.appendChild(b), inline);
+  }
+
+  function renderDetail() {
+    const d = findDetail();
+    const old = document.querySelector(".fitstamp-detail");
+    if (!d) return void old?.remove();
+    if (old && old.previousElementSibling !== d.after) old.remove();
+    const current = document.querySelector(".fitstamp-detail");
+    if (!results.has(d.id) && !blocked) enqueue(d.id, null);
+    place(current, d.id, (b) => d.after.after(b), "fitstamp-detail");
   }
 
   function renderAll() {
     for (const [card, id] of registered()) render(card, id);
+    renderDetail();
   }
 
   function registered() {
@@ -250,6 +295,7 @@
       // Virtualised lists empty and refill cards on scroll; put the stamp back.
       if (results.has(id)) render(card, id);
     }
+    renderDetail();
   }
 
   let scanTimer = null;
@@ -267,8 +313,8 @@
     bannerEl?.remove();
     queue.length = 0;
     results.clear();
+    document.querySelectorAll(".fitstamp-badge").forEach((b) => b.remove());
     for (const [card] of registered()) {
-      card.querySelector(":scope > .fitstamp-badge")?.remove();
       io.unobserve(card);
       io.observe(card);
     }

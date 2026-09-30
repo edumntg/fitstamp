@@ -9,7 +9,7 @@ Scoring runs on [Jev 1.13](https://openrouter.ai/typesafe/jev-1.13) through your
 ## How it works
 
 1. You give the extension your resume (PDF, TXT or Markdown) and your OpenRouter key. Importing your LinkedIn profile is optional and adds whatever the resume leaves out.
-2. On `linkedin.com/jobs/*`, each job card that scrolls into view is picked up. The extension downloads the full posting from LinkedIn's public job page (the same one a logged-out visitor sees), so it scores the whole description and not just the title.
+2. On `linkedin.com/jobs/*`, each job card that scrolls into view is picked up, and so is the job you have open in the right-hand pane (its stamp sits under the title). The extension downloads the full posting from LinkedIn's public job page (the same one a logged-out visitor sees), so it scores the whole description and not just the title.
 3. Your resume, profile and the posting go to Jev in one request with three questions:
    - **fit**: a 0–3 score, from "no meaningful overlap" to "meets nearly all requirements and the seniority fits"
    - **requirements**: the probability that you meet the hard requirements (years, required tech, degrees, certifications)
@@ -82,7 +82,7 @@ Pull the latest code (`git pull`, or download the ZIP again), then open `chrome:
 | A dark box at the bottom right saying FitStamp can't score | It tells you what's missing (key, resume, rejected key, no credits). Click **Open settings**. |
 | **FitStamp: error** on a card | Hover it for the message. Usually a network hiccup; **Re-score everything** in settings retries. |
 | Stamps with a dashed border | LinkedIn rate-limited the posting download, so the score uses the card only. The extension backs off and keeps going. |
-| Stamps stopped appearing after a LinkedIn update | LinkedIn changes its page layout often. Open an issue with a screenshot; the card detection lives in `findCards()` in `src/content/jobs.js`. |
+| Stamps stopped appearing after a LinkedIn update | LinkedIn changes its page layout often. Open an issue with a screenshot; card detection lives in `findCards()` and the open-job pane in `findDetail()`, both in `src/content/jobs.js`. |
 | Scores seem off for a non-English resume | Jev is trained mainly on English. An English version of your resume scores more accurately. |
 
 ## Privacy

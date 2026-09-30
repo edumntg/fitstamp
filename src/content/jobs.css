@@ -38,6 +38,10 @@
 .fitstamp-error { color: #666; border-style: dotted; transform: none; }
 .fitstamp-cardonly { border-style: dashed; }
 
+/* Inside a card's own padded column, or under the open job's title. */
+.fitstamp-inline { margin: 8px 0 0; }
+.fitstamp-detail { margin: 6px 0 4px; }
+
 .fitstamp-banner {
   position: fixed;
   right: 16px;
