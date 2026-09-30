@@ -1,5 +1,5 @@
 import * as pdfjs from "../../vendor/pdfjs/pdf.min.mjs";
-import { testKey } from "../lib/jev.js";
+import { testKey, PROVIDERS } from "../lib/jev.js";
 
 pdfjs.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL("vendor/pdfjs/pdf.worker.min.mjs");
 
@@ -15,22 +15,40 @@ const fmtDate = (t) => new Date(t).toLocaleString();
 
 // ---------- API key ----------
 
+// The OpenRouter key is stored as `apiKey` (its name predates TypeSafe support).
+const KEY_FIELD = { openrouter: { input: "openrouterKey", store: "apiKey" }, typesafe: { input: "typesafeKey", store: "typesafeKey" } };
+
+const selectedProvider = () => document.querySelector('input[name="provider"]:checked').value;
+
+function showProvider(provider) {
+  document.querySelectorAll("[data-provider]").forEach((el) => (el.hidden = el.dataset.provider !== provider));
+}
+
+document.querySelectorAll('input[name="provider"]').forEach((r) => {
+  r.onchange = () => {
+    showProvider(r.value);
+    status($("keyStatus"), "");
+  };
+});
+
 $("saveKey").onclick = async () => {
-  const apiKey = $("apiKey").value.trim();
-  if (!apiKey) return status($("keyStatus"), "Paste a key first.", "error");
-  await store.set({ apiKey });
-  status($("keyStatus"), "Saved.", "ok");
+  const provider = selectedProvider();
+  const key = $(KEY_FIELD[provider].input).value.trim();
+  if (!key) return status($("keyStatus"), "Paste a key first.", "error");
+  await store.set({ provider, [KEY_FIELD[provider].store]: key });
+  status($("keyStatus"), `Saved. Jobs are now scored through ${PROVIDERS[provider].label}.`, "ok");
 };
 
 $("testKey").onclick = async () => {
-  const apiKey = $("apiKey").value.trim();
+  const provider = selectedProvider();
+  const apiKey = $(KEY_FIELD[provider].input).value.trim();
   if (!apiKey) return status($("keyStatus"), "Paste a key first.", "error");
   status($("keyStatus"), "Testing…");
   try {
-    await testKey(apiKey);
-    status($("keyStatus"), "The key works and Jev answered.", "ok");
+    await testKey({ provider, apiKey });
+    status($("keyStatus"), `The key works and Jev answered through ${PROVIDERS[provider].label}.`, "ok");
   } catch (e) {
-    status($("keyStatus"), `Jev call failed: ${e.message}`, "error");
+    status($("keyStatus"), `Jev call through ${PROVIDERS[provider].label} failed: ${e.message}`, "error");
   }
 };
 
@@ -112,9 +130,18 @@ $("clearCache").onclick = async () => {
 
 // ---------- load + live refresh ----------
 
+let refreshed = false;
+
 async function refresh() {
-  const s = await store.get(["apiKey", "resume", "profile", "profileUrl", "stats"]);
-  if (s.apiKey && !$("apiKey").value) $("apiKey").value = s.apiKey;
+  const s = await store.get(["provider", "apiKey", "typesafeKey", "resume", "profile", "profileUrl", "stats"]);
+  if (!refreshed) {
+    const provider = s.provider === "typesafe" ? "typesafe" : "openrouter";
+    document.querySelector(`input[name="provider"][value="${provider}"]`).checked = true;
+    showProvider(provider);
+    refreshed = true;
+  }
+  if (s.apiKey && !$("openrouterKey").value) $("openrouterKey").value = s.apiKey;
+  if (s.typesafeKey && !$("typesafeKey").value) $("typesafeKey").value = s.typesafeKey;
   if (s.resume && !$("resumeText").value) {
     $("resumeText").value = s.resume.text;
     resumeName = s.resume.name;
@@ -130,7 +157,7 @@ async function refresh() {
     $("profileDetails").hidden = true;
   }
   const st = s.stats || { scored: 0, cost: 0 };
-  $("stats").textContent = `${st.scored.toLocaleString()} jobs scored, $${st.cost.toFixed(4)} spent on OpenRouter.`;
+  $("stats").textContent = `${st.scored.toLocaleString()} jobs scored, $${st.cost.toFixed(4)} spent on Jev.`;
 }
 
 chrome.storage.onChanged.addListener((_, area) => area === "local" && refresh());

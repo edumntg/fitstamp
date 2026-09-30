@@ -1,9 +1,26 @@
 // Jev is a decision model: it never writes text, it answers typed questions
 // (score / noul / choice) about a `state` with calibrated probabilities.
 // Docs: https://docs.typesafe.ai/api and https://openrouter.ai/docs/guides/community/typesafe-sdk
+//
+// Both providers take the same request and return the same answers; only the
+// URL, the model name and the error body differ.
+export const PROVIDERS = {
+  openrouter: {
+    label: "OpenRouter",
+    endpoint: "https://openrouter.ai/api/v1/systemone",
+    model: "jev-1.13",
+    headers: { "HTTP-Referer": "https://github.com/edumntg/fitstamp", "X-Title": "FitStamp" },
+  },
+  typesafe: {
+    label: "TypeSafe",
+    endpoint: "https://api.typesafe.ai/v1/systemone",
+    model: "jev-1.13.0",
+    headers: {},
+  },
+};
 
-export const ENDPOINT = "https://openrouter.ai/api/v1/systemone";
-export const MODEL = "jev-1.13";
+// TypeSafe doesn't report cost; Jev 1.13 bills $0.042 per million input tokens.
+const USD_PER_INPUT_TOKEN = 0.042 / 1e6;
 
 // Jev's context is 32k tokens. These caps keep resume + profile + job well under it.
 const MAX_RESUME = 14000;
@@ -46,26 +63,35 @@ export function buildState(candidate, job) {
   return { candidate: c, job: j };
 }
 
-async function call(apiKey, state, questions) {
-  const res = await fetch(ENDPOINT, {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// `auth` is { provider: "openrouter" | "typesafe", apiKey }.
+async function call(auth, state, questions, attempt = 0) {
+  const p = PROVIDERS[auth.provider] || PROVIDERS.openrouter;
+  const res = await fetch(p.endpoint, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://github.com/edumntg/fitstamp",
-      "X-Title": "FitStamp",
-    },
-    body: JSON.stringify({ model: MODEL, state, questions }),
+    headers: { Authorization: `Bearer ${auth.apiKey}`, "Content-Type": "application/json", ...p.headers },
+    body: JSON.stringify({ model: p.model, state, questions }),
   });
+  // 429 = rate limited, 529 = TypeSafe overloaded: both ask for a retry with backoff.
+  if ((res.status === 429 || res.status === 529) && attempt < 3) {
+    const retryAfter = Number(res.headers.get("retry-after")) * 1000;
+    await sleep(retryAfter || 1000 * 2 ** attempt);
+    return call(auth, state, questions, attempt + 1);
+  }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const msg = body?.error?.message || `HTTP ${res.status}`;
+    // OpenRouter: { error: { message } }. TypeSafe: { detail: { message } } or { detail: "..." }.
+    const detail = body?.detail;
+    const msg = body?.error?.message || detail?.message || (typeof detail === "string" ? detail : "") || `HTTP ${res.status}`;
     const err = new Error(msg);
     err.status = res.status;
     throw err;
   }
   return body;
 }
+
+const costOf = (usage) => usage?.cost ?? (usage?.input_tokens != null ? usage.input_tokens * USD_PER_INPUT_TOKEN : null);
 
 // Weights live in code on purpose (the "composite scoring" pattern): the model
 // answers narrow questions, we decide how much each one matters.
@@ -86,14 +112,14 @@ export function combine(answers) {
   };
 }
 
-export async function scoreJob(apiKey, candidate, job) {
-  const body = await call(apiKey, buildState(candidate, job), QUESTIONS);
-  return { ...combine(body.answers), cost: body.usage?.cost ?? null };
+export async function scoreJob(auth, candidate, job) {
+  const body = await call(auth, buildState(candidate, job), QUESTIONS);
+  return { ...combine(body.answers), cost: costOf(body.usage) };
 }
 
-export async function testKey(apiKey) {
-  const body = await call(apiKey, "Hello", {
+export async function testKey(auth) {
+  const body = await call(auth, "Hello", {
     ok: { type: "noul", instructions: "Is this a greeting?" },
   });
-  return body.usage?.cost ?? 0;
+  return costOf(body.usage) ?? 0;
 }

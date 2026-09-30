@@ -13,14 +13,17 @@ function fnv1a(str) {
   return (h >>> 0).toString(36);
 }
 
+// `apiKey` is the OpenRouter key (its name predates TypeSafe support).
 async function settings() {
-  return chrome.storage.local.get(["apiKey", "resume", "profile", "enabled"]);
+  const s = await chrome.storage.local.get(["provider", "apiKey", "typesafeKey", "resume", "profile", "enabled"]);
+  const provider = s.provider === "typesafe" ? "typesafe" : "openrouter";
+  return { ...s, auth: { provider, apiKey: provider === "typesafe" ? s.typesafeKey : s.apiKey } };
 }
 
 async function handleScore(job) {
   const s = await settings();
   if (s.enabled === false) return { ok: false, reason: "disabled" };
-  if (!s.apiKey) return { ok: false, reason: "no-key" };
+  if (!s.auth.apiKey) return { ok: false, reason: "no-key" };
   if (!s.resume?.text) return { ok: false, reason: "no-resume" };
 
   const candidate = { resume: s.resume.text, profile: s.profile?.text || "" };
@@ -36,7 +39,7 @@ async function handleScore(job) {
   if (!inflight.has(flightKey)) {
     inflight.set(
       flightKey,
-      scoreJob(s.apiKey, candidate, job).finally(() => inflight.delete(flightKey))
+      scoreJob(s.auth, candidate, job).finally(() => inflight.delete(flightKey))
     );
   }
   try {

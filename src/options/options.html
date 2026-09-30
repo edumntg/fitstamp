@@ -16,10 +16,22 @@
     </header>
 
     <section>
-      <h2><span class="step">1</span> OpenRouter API key</h2>
-      <p class="hint">Scoring runs on <a href="https://openrouter.ai/typesafe/jev-1.13" target="_blank" rel="noopener">Jev 1.13</a> through your own OpenRouter account. A job costs about $0.0001. Create a key at <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">openrouter.ai/settings/keys</a>.</p>
-      <div class="row">
-        <input id="apiKey" type="password" placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false">
+      <h2><span class="step">1</span> API key</h2>
+      <p class="hint">Scoring runs on Jev 1.13, a model by TypeSafe. Use a key from either place; a job costs about $0.0001 on both.</p>
+      <fieldset class="providers">
+        <legend class="sr-only">Where your key is from</legend>
+        <label><input type="radio" name="provider" value="openrouter" checked> OpenRouter</label>
+        <label><input type="radio" name="provider" value="typesafe"> TypeSafe</label>
+      </fieldset>
+      <div data-provider="openrouter">
+        <p class="hint">Create a key at <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">openrouter.ai/settings/keys</a>. Requests go through OpenRouter to TypeSafe and are billed to your OpenRouter credits.</p>
+        <input id="openrouterKey" type="password" placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false" aria-label="OpenRouter API key">
+      </div>
+      <div data-provider="typesafe" hidden>
+        <p class="hint">Create a key at <a href="https://console.typesafe.ai/keys" target="_blank" rel="noopener">console.typesafe.ai/keys</a>. Requests go straight to TypeSafe's API and are billed to your TypeSafe account.</p>
+        <input id="typesafeKey" type="password" placeholder="Your TypeSafe API key" autocomplete="off" spellcheck="false" aria-label="TypeSafe API key">
+      </div>
+      <div class="row key-actions">
         <button id="saveKey">Save</button>
         <button id="testKey" class="ghost">Test</button>
       </div>
@@ -62,7 +74,7 @@
     </section>
 
     <footer>
-      Your key, resume and profile stay in this browser's extension storage. Each score sends your resume, profile text and the job posting to OpenRouter, which forwards them to TypeSafe to run Jev.
+      Your key, resume and profile stay in this browser's extension storage. Each score sends your resume, profile text and the job posting to the provider you chose: OpenRouter, which forwards them to TypeSafe, or TypeSafe directly.
     </footer>
   </main>
   <script type="module" src="options.js"></script>

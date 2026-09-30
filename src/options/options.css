@@ -71,6 +71,27 @@ a { color: var(--accent); }
   flex-wrap: wrap;
 }
 
+.providers {
+  display: flex;
+  gap: 18px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+}
+
+.providers label { display: flex; align-items: center; gap: 6px; font-weight: 600; cursor: pointer; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+[data-provider] input { width: 100%; }
+.key-actions { margin-top: 10px; }
+
 input[type="password"], input[type="url"] {
   flex: 1 1 260px;
   min-width: 0;

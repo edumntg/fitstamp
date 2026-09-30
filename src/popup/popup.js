@@ -1,7 +1,9 @@
 const $ = (id) => document.getElementById(id);
 
-chrome.storage.local.get(["apiKey", "resume", "profile", "enabled", "stats"]).then((s) => {
-  $("hasKey").classList.toggle("done", !!s.apiKey);
+chrome.storage.local.get(["provider", "apiKey", "typesafeKey", "resume", "profile", "enabled", "stats"]).then((s) => {
+  const typesafe = s.provider === "typesafe";
+  $("hasKey").textContent = `${typesafe ? "TypeSafe" : "OpenRouter"} API key`;
+  $("hasKey").classList.toggle("done", !!(typesafe ? s.typesafeKey : s.apiKey));
   $("hasResume").classList.toggle("done", !!s.resume?.text);
   $("hasProfile").classList.toggle("done", !!s.profile?.text);
   $("enabled").checked = s.enabled !== false;

@@ -257,10 +257,10 @@
   let bannerEl = null;
   function showBanner(reason) {
     const msg = {
-      "no-key": "add your OpenRouter API key",
+      "no-key": "add your OpenRouter or TypeSafe API key",
       "no-resume": "upload your resume",
-      "bad-key": "your OpenRouter API key was rejected, check it",
-      "no-credits": "your OpenRouter account is out of credits",
+      "bad-key": "your API key was rejected, check it",
+      "no-credits": "your account is out of credits",
       disabled: null,
     }[reason];
     bannerEl?.remove();
@@ -308,7 +308,7 @@
   // New resume / profile / key / toggle / cleared cache: drop every stamp and start over.
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
-    if (!["apiKey", "resume", "profile", "enabled", "cacheEpoch"].some((k) => k in changes)) return;
+    if (!["provider", "apiKey", "typesafeKey", "resume", "profile", "enabled", "cacheEpoch"].some((k) => k in changes)) return;
     blocked = null;
     bannerEl?.remove();
     queue.length = 0;
