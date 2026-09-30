@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>FitStamp settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <header>
+      <img src="../../icons/icon48.png" alt="" width="36" height="36">
+      <div>
+        <h1>FitStamp</h1>
+        <p>Stamps every LinkedIn job with how well it matches you.</p>
+      </div>
+    </header>
+
+    <section>
+      <h2><span class="step">1</span> OpenRouter API key</h2>
+      <p class="hint">Scoring runs on <a href="https://openrouter.ai/typesafe/jev-1.13" target="_blank" rel="noopener">Jev 1.13</a> through your own OpenRouter account. A job costs about $0.0001. Create a key at <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">openrouter.ai/settings/keys</a>.</p>
+      <div class="row">
+        <input id="apiKey" type="password" placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false">
+        <button id="saveKey">Save</button>
+        <button id="testKey" class="ghost">Test</button>
+      </div>
+      <p id="keyStatus" class="status" role="status"></p>
+    </section>
+
+    <section>
+      <h2><span class="step">2</span> Your resume</h2>
+      <p class="hint">PDF, TXT or Markdown. The text is extracted here in your browser; check it below and fix anything that came out garbled.</p>
+      <label class="file">
+        <input id="resumeFile" type="file" accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown">
+        <span>Choose file…</span>
+      </label>
+      <textarea id="resumeText" rows="12" placeholder="…or paste your resume text here"></textarea>
+      <div class="row">
+        <button id="saveResume">Save resume</button>
+        <span id="resumeStatus" class="status" role="status"></span>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="step">3</span> LinkedIn profile <span class="optional">optional, improves accuracy</span></h2>
+      <p class="hint">FitStamp opens your profile in a tab, reads it, stores the text on this computer and closes the tab. Leave the field empty to use the profile you're logged in with.</p>
+      <div class="row">
+        <input id="profileUrl" type="url" placeholder="https://www.linkedin.com/in/your-name/" spellcheck="false">
+        <button id="importProfile">Import profile</button>
+      </div>
+      <p id="profileStatus" class="status" role="status"></p>
+      <details id="profileDetails" hidden>
+        <summary>See what was captured</summary>
+        <pre id="profileText"></pre>
+        <button id="clearProfile" class="ghost">Remove profile</button>
+      </details>
+    </section>
+
+    <section>
+      <h2>Usage</h2>
+      <p id="stats" class="hint"></p>
+      <button id="clearCache" class="ghost">Re-score everything</button>
+    </section>
+
+    <footer>
+      Your key, resume and profile stay in this browser's extension storage. Each score sends your resume, profile text and the job posting to OpenRouter, which forwards them to TypeSafe to run Jev.
+    </footer>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>
