@@ -112,7 +112,7 @@ $("importProfile").onclick = async () => {
     return status($("profileStatus"), "That doesn't look like a linkedin.com/in/… profile link.", "error");
   }
   url = url ? url.replace(/^https:\/\/linkedin\.com/i, "https://www.linkedin.com") : "https://www.linkedin.com/in/me/";
-  await store.set({ profileUrl: $("profileUrl").value.trim() });
+  await store.set({ profileUrl: $("profileUrl").value.trim(), profileImportError: null });
   status($("profileStatus"), "Opening your profile… this tab will come back when it's done.");
   await chrome.runtime.sendMessage({ type: "import-profile", url });
 };
@@ -133,7 +133,7 @@ $("clearCache").onclick = async () => {
 let refreshed = false;
 
 async function refresh() {
-  const s = await store.get(["provider", "apiKey", "typesafeKey", "resume", "profile", "profileUrl", "stats"]);
+  const s = await store.get(["provider", "apiKey", "typesafeKey", "resume", "profile", "profileUrl", "profileImportError", "stats"]);
   if (!refreshed) {
     const provider = s.provider === "typesafe" ? "typesafe" : "openrouter";
     document.querySelector(`input[name="provider"][value="${provider}"]`).checked = true;
@@ -148,7 +148,9 @@ async function refresh() {
     status($("resumeStatus"), `Saved: ${s.resume.name}, ${fmtDate(s.resume.updatedAt)}`, "ok");
   }
   if (s.profileUrl && !$("profileUrl").value) $("profileUrl").value = s.profileUrl;
-  if (s.profile) {
+  if (s.profileImportError) {
+    status($("profileStatus"), "Couldn't read your profile. Check that you're logged in to LinkedIn in this browser and that the link is right, then try again.", "error");
+  } else if (s.profile) {
     status($("profileStatus"), `Captured ${s.profile.text.length.toLocaleString()} characters from ${s.profile.url} on ${fmtDate(s.profile.capturedAt)}.`, "ok");
     $("profileText").textContent = s.profile.text;
     $("profileDetails").hidden = false;

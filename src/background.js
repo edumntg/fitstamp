@@ -81,23 +81,108 @@ async function clearCache() {
   await chrome.storage.local.set({ cacheEpoch: Date.now() }); // tells open LinkedIn tabs to re-score
 }
 
-// Profile import: open the user's own profile in a tab; profile.js asks whether
-// it is that tab, reads the page, and sends the text back.
+// Profile import: open the user's profile in a tab, then walk it through one
+// /details/<section>/ page per section. profile.js reads each page and reports
+// back with "profile-part"; the parts are joined into one text at the end.
+const DETAIL_SECTIONS = [
+  ["experience", "Experience"],
+  ["education", "Education"],
+  ["certifications", "Licenses & certifications"],
+  ["skills", "Skills"],
+  ["projects", "Projects"],
+  ["courses", "Courses"],
+  ["languages", "Languages"],
+];
+const PROFILE_ORDER = [
+  "About", "Top skills", "Experience", "Education", "Licenses & certifications", "Skills", "Projects",
+  "Courses", "Languages", "Honors & awards", "Volunteering", "Volunteer experience", "Publications",
+  "Test scores", "Services", "Featured",
+];
+const MAX_PROFILE_CHARS = 12000;
+const MAX_FEATURED_CHARS = 2500;
+const STEP_TIMEOUT = 25000;
+
 async function importProfile(url) {
   const tab = await chrome.tabs.create({ url, active: true });
-  await chrome.storage.session.set({ importTabId: tab.id });
+  await chrome.storage.session.set({
+    profileImport: { tabId: tab.id, step: 0, section: "main", heading: null, top: [], sections: {}, base: null, url },
+  });
+  armWatchdog(0);
 }
 
-async function onProfileCaptured(tabId, payload) {
-  const { importTabId } = await chrome.storage.session.get("importTabId");
-  if (tabId !== importTabId) return;
-  await chrome.storage.local.set({
-    profile: { url: payload.url, text: payload.text, capturedAt: Date.now() },
-  });
-  await chrome.storage.session.remove("importTabId");
+// If a page never reports (it failed to load, or LinkedIn showed something
+// unexpected), skip it rather than leaving the import stuck.
+let watchdog = null;
+function armWatchdog(step) {
+  clearTimeout(watchdog);
+  watchdog = setTimeout(async () => {
+    const { profileImport: st } = await chrome.storage.session.get("profileImport");
+    if (st && st.step === step) await advance(st);
+  }, STEP_TIMEOUT);
+}
+
+function importJob(st) {
+  const total = DETAIL_SECTIONS.length + 1;
+  if (st.section === "main") return { capture: true, section: "main", label: "profile", step: 1, total };
+  const [, heading] = DETAIL_SECTIONS.find(([s]) => s === st.section);
+  return { capture: true, section: st.section, heading, label: heading, step: st.step + 1, total };
+}
+
+async function onProfilePart(tabId, part) {
+  const { profileImport: st } = await chrome.storage.session.get("profileImport");
+  if (!st || st.tabId !== tabId || part.section !== st.section) return;
+  if (part.section === "main") {
+    st.top = part.top || [];
+    st.sections = part.sections || {};
+    const m = part.url.match(/^https:\/\/www\.linkedin\.com\/in\/[^/]+\//);
+    st.base = m ? m[0] : null;
+    st.url = st.base || part.url;
+  } else if (part.lines?.length) {
+    const [, heading] = DETAIL_SECTIONS.find(([s]) => s === part.section);
+    // The details page has the full list; the main page only had the first few.
+    st.sections[heading] = part.lines;
+  }
+  await advance(st);
+}
+
+async function advance(st) {
+  const next = st.base ? DETAIL_SECTIONS[st.step] : null; // no base url: can't reach details pages
+  if (next) {
+    st.step += 1;
+    st.section = next[0];
+    await chrome.storage.session.set({ profileImport: st });
+    armWatchdog(st.step);
+    await chrome.tabs.update(st.tabId, { url: `${st.base}details/${next[0]}/` }).catch(() => finishImport(st));
+    return;
+  }
+  await finishImport(st);
+}
+
+function assembleProfile(st) {
+  const parts = [st.top.join("\n")];
+  for (const heading of PROFILE_ORDER) {
+    const lines = st.sections[heading];
+    if (!lines?.length) continue;
+    let body = lines.join("\n");
+    if (heading === "Featured" && body.length > MAX_FEATURED_CHARS) body = body.slice(0, MAX_FEATURED_CHARS) + " …";
+    parts.push(`## ${heading}\n${body}`);
+  }
+  return parts.filter(Boolean).join("\n\n").slice(0, MAX_PROFILE_CHARS);
+}
+
+async function finishImport(st) {
+  clearTimeout(watchdog);
+  await chrome.storage.session.remove("profileImport");
+  const text = assembleProfile(st);
+  if (text.trim()) {
+    await chrome.storage.local.set({ profile: { url: st.url, text, capturedAt: Date.now() }, profileImportError: null });
+  } else {
+    // Usually the login wall: the tab never reached a profile page.
+    await chrome.storage.local.set({ profileImportError: Date.now() });
+  }
   const opts = await chrome.tabs.query({ url: chrome.runtime.getURL("src/options/options.html") });
   if (opts[0]) await chrome.tabs.update(opts[0].id, { active: true });
-  setTimeout(() => chrome.tabs.remove(tabId).catch(() => {}), 1500);
+  setTimeout(() => chrome.tabs.remove(st.tabId).catch(() => {}), 1000);
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -109,11 +194,11 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         await importProfile(msg.url);
         return { ok: true };
       case "is-import-tab": {
-        const { importTabId } = await chrome.storage.session.get("importTabId");
-        return { capture: sender.tab?.id === importTabId };
+        const { profileImport: st } = await chrome.storage.session.get("profileImport");
+        return st && st.tabId === sender.tab?.id ? importJob(st) : { capture: false };
       }
-      case "profile-captured":
-        await onProfileCaptured(sender.tab?.id, msg);
+      case "profile-part":
+        await onProfilePart(sender.tab?.id, msg);
         return { ok: true };
       case "open-options":
         await chrome.runtime.openOptionsPage();

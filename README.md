@@ -70,7 +70,7 @@ It works the same in Edge, Brave and other Chromium browsers (`edge://extensions
 
 1. **API key**: choose **OpenRouter** or **TypeSafe**, paste the key, click **Save**, then **Test**. You should see "The key works and Jev answered through …". The extension uses whichever provider is selected when you save; each provider's key is kept, so you can switch back and forth.
 2. **Your resume**: click **Choose file…** and pick your resume. The extracted text appears in the box; read it over, fix anything garbled and click **Save resume**. If your PDF is a scanned image no text will come out; paste the text into the box instead.
-3. **LinkedIn profile** (optional, improves accuracy): paste your profile link (`https://www.linkedin.com/in/your-name/`) or leave it empty to use the account you're logged into, then click **Import profile**. A tab opens on your profile, scrolls through it, saves the text and closes. Click **See what was captured** to check it.
+3. **LinkedIn profile** (optional, improves accuracy): paste your profile link (`https://www.linkedin.com/in/your-name/`) or leave it empty to use the account you're logged into, then click **Import profile**. A tab opens on your profile and steps through its section pages (experience, education, certifications, skills, projects, courses, languages), then closes; it takes about half a minute. It keeps your name, headline, location, About, top skills, featured posts and those sections, and leaves out everything else on the page: analytics, suggestions, other people's profiles, the footer. Click **See what was captured** to check it. You need to be logged in to LinkedIn in the same browser.
 
 ### 5. Use it
 
